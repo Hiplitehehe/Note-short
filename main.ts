@@ -17,16 +17,16 @@ router
   })
 
   .post("/add", async (ctx) => {
-    const body = await ctx.request.body({ type: "form" }).value;
-    const note = body.get("note");
+    const formData = await ctx.request.originalRequest.formData();
+    const note = formData.get("note");
     const id = crypto.randomUUID();
     await kv.set(["note", id], note);
     ctx.response.redirect("/");
   })
 
   .post("/delete", async (ctx) => {
-    const body = await ctx.request.body({ type: "form" }).value;
-    const id = body.get("id");
+    const formData = await ctx.request.originalRequest.formData();
+    const id = formData.get("id");
     await kv.delete(["note", id]);
     ctx.response.redirect("/");
   });
