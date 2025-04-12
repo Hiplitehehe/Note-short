@@ -1,4 +1,3 @@
-
 import { Application, Router } from "https://deno.land/x/oak/mod.ts";
 
 const kv = await Deno.openKv();
@@ -54,3 +53,4 @@ app.use(router.allowedMethods());
 
 console.log("Listening on http://localhost:8000");
 await app.listen({ port: 8000 });
+
