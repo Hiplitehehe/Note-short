@@ -1,4 +1,6 @@
+
 import { Application, Router } from "https://deno.land/x/oak/mod.ts";
+import { renderPage } from "./template.ts";
 
 const kv = await Deno.openKv();
 const router = new Router();
@@ -9,27 +11,9 @@ router
     for await (const entry of kv.list({ prefix: ["note"] })) {
       notes.push({ id: entry.key[1], content: entry.value });
     }
-    ctx.response.body = `
-      <h1>Deno Notes</h1>
-      <form method="POST" action="/add">
-        <input name="note" placeholder="Write a note" required>
-        <button type="submit">Add</button>
-      </form>
-      <ul>
-        ${notes
-          .map(
-            (note) => `
-          <li>
-            ${note.content}
-            <form method="POST" action="/delete" style="display:inline;">
-              <input type="hidden" name="id" value="${note.id}">
-              <button type="submit">Delete</button>
-            </form>
-          </li>`
-          )
-          .join("")}
-      </ul>
-    `;
+
+    ctx.response.headers.set("Content-Type", "text/html");
+    ctx.response.body = renderPage(notes);
   })
 
   .post("/add", async (ctx) => {
@@ -53,4 +37,3 @@ app.use(router.allowedMethods());
 
 console.log("Listening on http://localhost:8000");
 await app.listen({ port: 8000 });
-
