@@ -24,7 +24,7 @@ serve(async (req) => {
     if (!valid) return new Response("CAPTCHA failed", { status: 403 });
 
     await kvSaveNote({ note, tags, user });
-    return Response.redirect("/", 303);
+    return Response.redirect(new URL("/", req.url), 303);
   }
 
   if (pathname === "/react" && method === "POST") {
@@ -33,7 +33,7 @@ serve(async (req) => {
     if (!valid) return new Response("CAPTCHA failed", { status: 403 });
 
     await kvAddReaction(id);
-    return Response.redirect("/", 303);
+    return Response.redirect(new URL("/", req.url), 303);
   }
 
   return new Response("404 Not Found", { status: 404 });
