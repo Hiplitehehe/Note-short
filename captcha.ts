@@ -1,16 +1,10 @@
 
-
-export async function verifyCaptcha(token: string, secret: string, provider = "recaptcha_v2_invisible") {
-  if (!token) return false;
-
-  let verifyURL = "https://www.google.com/recaptcha/api/siteverify";
-  const params = new URLSearchParams({ secret, response: token });
-
-  const res = await fetch(verifyURL, {
+export async function verifyCaptcha(token: string, secret: string): Promise<boolean> {
+  const res = await fetch("https://www.google.com/recaptcha/api/siteverify", {
     method: "POST",
-    body: params,
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `secret=${secret}&response=${token}`
   });
-
-  const json = await res.json();
-  return json.success;
+  const data = await res.json();
+  return data.success === true;
 }
