@@ -1,145 +1,40 @@
 
-// deno-notes-auth/main.ts
 import { serve } from "https://deno.land/std/http/server.ts";
-import { getCookies, setCookie, deleteCookie } from "https://deno.land/std/http/cookie.ts";
+import { getFormData, renderHTML } from "./template.ts";
+import { verifyCaptcha } from "./captcha.ts";
+import { kvGetUser, kvSaveNote, kvGetNotes, kvAddReaction } from "./kv.ts";
 
-const kv = await Deno.openKv();
+const CAPTCHA_PROVIDER = "recaptcha_v2_invisible";
+const SITE_KEY = "6LfoZxYrAAAAABpgDrDQ-XBW6BXoSqF9AcjjuJgD";
+const SECRET_KEY = "6LfoZxYrAAAAAO3oa1stPuQdOWBgZHowhoA59FtH";
 
 serve(async (req) => {
   const url = new URL(req.url);
-  const path = url.pathname;
+  const pathname = url.pathname;
   const method = req.method;
-  const cookies = getCookies(req.headers);
-  const username = cookies.session;
 
-  if (!username && path !== "/login") {
-    return redirect("/login");
+  if (pathname === "/" && method === "GET") {
+    const notes = await kvGetNotes();
+    return renderHTML({ notes, siteKey: SITE_KEY });
   }
 
-  if (method === "GET" && path === "/login") {
-    return html(`
-      <h2>Login / Signup</h2>
-      <form method="POST" action="/login">
-        <input name="username" placeholder="Username" required />
-        <input name="password" placeholder="Password" type="password" required />
-        <button type="submit">Enter</button>
-      </form>
-    `);
+  if (pathname === "/add" && method === "POST") {
+    const { note, tags, token, user } = await getFormData(req);
+    const valid = await verifyCaptcha(token, SECRET_KEY, CAPTCHA_PROVIDER);
+    if (!valid) return new Response("CAPTCHA failed", { status: 403 });
+
+    await kvSaveNote({ note, tags, user });
+    return Response.redirect("/", 303);
   }
 
-  if (method === "POST" && path === "/login") {
-    const form = await req.formData();
-    const username = form.get("username")?.toString() ?? "";
-    const password = form.get("password")?.toString() ?? "";
-    const stored = await kv.get(["user", username]);
+  if (pathname === "/react" && method === "POST") {
+    const { id, token } = await getFormData(req);
+    const valid = await verifyCaptcha(token, SECRET_KEY, CAPTCHA_PROVIDER);
+    if (!valid) return new Response("CAPTCHA failed", { status: 403 });
 
-    if (!stored.value) {
-      await kv.set(["user", username], password);
-    } else if (stored.value !== password) {
-      return html("<p>Invalid password. <a href='/login'>Try again</a></p>");
-    }
-
-    const headers = new Headers();
-    setCookie(headers, { name: "session", value: username, path: "/" });
-    headers.set("Location", "/");
-    return new Response(null, { status: 303, headers });
-  }
-
-  if (method === "GET" && path === "/logout") {
-    const headers = new Headers();
-    deleteCookie(headers, "session");
-    headers.set("Location", "/login");
-    return new Response(null, { status: 303, headers });
-  }
-
-  if (method === "GET" && path === "/") {
-    const notes = [];
-    for await (const entry of kv.list({ prefix: ["note", username] })) {
-      notes.push({ id: entry.key[2], content: entry.value });
-    }
-    return html(renderPage(username, notes));
-  }
-
-  if (method === "POST" && path === "/add") {
-    const form = await req.formData();
-    const note = form.get("note")?.toString();
-    if (note) {
-      const id = crypto.randomUUID();
-      await kv.set(["note", username, id], note);
-    }
-    return redirect("/");
-  }
-
-  if (method === "POST" && path === "/delete") {
-    const form = await req.formData();
-    const id = form.get("id")?.toString();
-    if (id) await kv.delete(["note", username, id]);
-    return redirect("/");
-  }
-
-  if (method === "POST" && path === "/edit") {
-    const form = await req.formData();
-    const id = form.get("id")?.toString();
-    const content = form.get("content")?.toString();
-    if (id && content) await kv.set(["note", username, id], content);
-    return redirect("/");
-  }
-
-  if (method === "GET" && path === "/export") {
-    const notes = [];
-    for await (const entry of kv.list({ prefix: ["note", username] })) {
-      notes.push({ id: entry.key[2], content: entry.value });
-    }
-    const body = JSON.stringify(notes, null, 2);
-    return new Response(body, {
-      headers: { "content-type": "application/json" },
-    });
+    await kvAddReaction(id);
+    return Response.redirect("/", 303);
   }
 
   return new Response("404 Not Found", { status: 404 });
 });
-
-function html(body: string) {
-  return new Response(`<!DOCTYPE html><html><body>${body}</body></html>`, {
-    headers: { "content-type": "text/html" },
-  });
-}
-
-function redirect(location: string) {
-  return new Response(null, {
-    status: 303,
-    headers: { Location: location },
-  });
-}
-
-function renderPage(username: string, notes: { id: string; content: string }[]) {
-  const list = notes
-    .map(
-      (n) => `
-      <li>
-        <form method="POST" action="/edit">
-          <input type="hidden" name="id" value="${n.id}" />
-          <input name="content" value="${n.content}" />
-          <button type="submit">Save</button>
-        </form>
-        <form method="POST" action="/delete" style="display:inline">
-          <input type="hidden" name="id" value="${n.id}" />
-          <button type="submit">Delete</button>
-        </form>
-      </li>`
-    )
-    .join("");
-
-  return `
-    <h1>${username}'s Notes</h1>
-    <form method="POST" action="/add">
-      <input name="note" placeholder="Write a note" required />
-      <button type="submit">Add</button>
-    </form>
-    <ul>${list}</ul>
-    <p>
-      <a href="/export">Export Notes</a> |
-      <a href="/logout">Logout</a>
-    </p>
-  `;
-}
