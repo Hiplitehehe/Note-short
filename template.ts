@@ -1,4 +1,5 @@
 
+
 export async function getFormData(req: Request) {
   const form = await req.formData();
   return {
@@ -27,7 +28,7 @@ export function renderHTML({ notes, siteKey }: { notes: any[], siteKey: string }
             data-callback="onSubmit">Add Note</button>
   </form>
   <ul>
-    ${notes.map(n => `<li>${n.text} (${n.tags.join(", ")}) - тнР ${n.stars}</li>`).join("")}
+    ${notes.map(n => `<li>${n.text} (${(n.tags || []).join(", ")}) - тнР ${n.stars}</li>`).join("")}
   </ul>
   <form method="POST" action="/react">
     <input name="id" placeholder="Note ID">
